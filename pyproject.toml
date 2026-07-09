@@ -1,0 +1,19 @@
+[project]
+name = "cm"
+version = "0.1.0"
+description = "AI-powered git commit message generator using AWS Bedrock"
+readme = "README.md"
+authors = [
+    { name = "Sheldon McGrandle", email = "developer@8cylinder.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.43.44",
+]
+
+[project.scripts]
+cm = "cm:main"
+
+[build-system]
+requires = ["uv_build>=0.11.17,<0.12.0"]
+build-backend = "uv_build"
