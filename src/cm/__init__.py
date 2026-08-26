@@ -6,6 +6,12 @@ import tempfile
 import textwrap
 
 import boto3
+from botocore.exceptions import (
+    CredentialRetrievalError,
+    NoCredentialsError,
+    SSOError,
+    TokenRetrievalError,
+)
 from rich.console import Console
 from rich.status import Status
 
@@ -138,7 +144,14 @@ def main():
     stat = get_stat()
 
     console = Console(stderr=True)
-    with Status("Generating commit message...", console=console):
-        message = generate_commit_message(diff, stat)
+    try:
+        with Status("Generating commit message...", console=console):
+            message = generate_commit_message(diff, stat)
+    except (NoCredentialsError, TokenRetrievalError, SSOError, CredentialRetrievalError):
+        console.print(
+            "[bold red]Error:[/] AWS session has expired or credentials are missing.\n"
+            "Run [bold]aws sso login --profile bedrock[/] to authenticate."
+        )
+        sys.exit(1)
 
     print(message)
