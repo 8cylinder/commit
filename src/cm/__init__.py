@@ -66,9 +66,19 @@ def get_stat():
     return result
 
 
+def get_recent_commits():
+    result = subprocess.run(
+        ["git", "log", "--oneline", "-20"],
+        capture_output=True, text=True
+    )
+    return result.stdout.strip()
+
+
 def generate_commit_message(diff, stat):
     session = boto3.Session(profile_name="bedrock")
     client = session.client("bedrock-runtime", region_name="us-west-2")
+
+    recent_commits = get_recent_commits()
 
     prompt = f"""Write a concise git commit message for the following changes.
 
@@ -81,6 +91,9 @@ Rules:
 - No markdown formatting, no backticks
 - Just the commit message, nothing else
 - Do NOT include any AI attribution, co-authorship tags, or "Generated with Claude" disclaimers.
+
+Recent commit messages (match this style and tone):
+{recent_commits}
 
 File summary:
 {stat}
@@ -95,7 +108,7 @@ Diff:
     })
 
     response = client.invoke_model(
-        modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+        modelId="us.anthropic.claude-opus-4-6-v1",
         contentType="application/json",
         accept="application/json",
         body=body,
