@@ -154,4 +154,5 @@ def main():
         )
         sys.exit(1)
 
-    print(message)
+    console.print(message)
+    subprocess.run(["pbcopy"], input=message, text=True)
