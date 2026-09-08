@@ -199,4 +199,4 @@ def main():
         sys.exit(1)
 
     console.print(message)
-    subprocess.run(["pbcopy"], input=message, text=True)
+    subprocess.run(["pbcopy"], input=message + "\n", text=True)
