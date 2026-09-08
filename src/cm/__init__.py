@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import subprocess
@@ -16,54 +17,74 @@ from rich.console import Console
 from rich.status import Status
 
 
-def get_diff():
-    diff = subprocess.run(
-        ["git", "diff"],
-        capture_output=True, text=True
-    )
-    if diff.returncode != 0:
-        print("Error: not a git repository or git not available", file=sys.stderr)
-        sys.exit(1)
-
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        capture_output=True, text=True
-    )
-    untracked_files = untracked.stdout.strip().splitlines()
-
-    untracked_content = ""
-    for filepath in untracked_files:
-        content = subprocess.run(
-            ["git", "diff", "--no-index", "/dev/null", filepath],
+def get_diff(staged=False):
+    if staged:
+        diff = subprocess.run(
+            ["git", "diff", "--cached"],
             capture_output=True, text=True
         )
-        untracked_content += content.stdout
+        if diff.returncode != 0:
+            print("Error: not a git repository or git not available", file=sys.stderr)
+            sys.exit(1)
+        if not diff.stdout.strip():
+            print("Error: no staged changes.", file=sys.stderr)
+            sys.exit(1)
+        return diff.stdout
+    else:
+        diff = subprocess.run(
+            ["git", "diff"],
+            capture_output=True, text=True
+        )
+        if diff.returncode != 0:
+            print("Error: not a git repository or git not available", file=sys.stderr)
+            sys.exit(1)
 
-    combined = diff.stdout + untracked_content
-    if not combined.strip():
-        print("Error: no uncommitted changes.", file=sys.stderr)
-        sys.exit(1)
-    return combined
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True
+        )
+        untracked_files = untracked.stdout.strip().splitlines()
+
+        untracked_content = ""
+        for filepath in untracked_files:
+            content = subprocess.run(
+                ["git", "diff", "--no-index", "/dev/null", filepath],
+                capture_output=True, text=True
+            )
+            untracked_content += content.stdout
+
+        combined = diff.stdout + untracked_content
+        if not combined.strip():
+            print("Error: no uncommitted changes.", file=sys.stderr)
+            sys.exit(1)
+        return combined
 
 
-def get_stat():
-    stat = subprocess.run(
-        ["git", "diff", "--stat"],
-        capture_output=True, text=True
-    )
+def get_stat(staged=False):
+    if staged:
+        stat = subprocess.run(
+            ["git", "diff", "--cached", "--stat"],
+            capture_output=True, text=True
+        )
+        return stat.stdout
+    else:
+        stat = subprocess.run(
+            ["git", "diff", "--stat"],
+            capture_output=True, text=True
+        )
 
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        capture_output=True, text=True
-    )
-    untracked_files = untracked.stdout.strip().splitlines()
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True
+        )
+        untracked_files = untracked.stdout.strip().splitlines()
 
-    result = stat.stdout
-    if untracked_files:
-        result += "\nNew untracked files:\n"
-        for f in untracked_files:
-            result += f"  {f}\n"
-    return result
+        result = stat.stdout
+        if untracked_files:
+            result += "\nNew untracked files:\n"
+            for f in untracked_files:
+                result += f"  {f}\n"
+        return result
 
 
 def get_recent_commits():
@@ -153,8 +174,18 @@ def open_editor(message):
 
 
 def main():
-    diff = get_diff()
-    stat = get_stat()
+    parser = argparse.ArgumentParser(
+        description="AI-powered git commit message generator"
+    )
+    parser.add_argument(
+        "-s", "--staged",
+        action="store_true",
+        help="generate commit message for staged changes only",
+    )
+    args = parser.parse_args()
+
+    diff = get_diff(staged=args.staged)
+    stat = get_stat(staged=args.staged)
 
     console = Console(stderr=True)
     try:
