@@ -49,10 +49,17 @@ select = [
     "TID",
     "ANN",
 ]
+# boto3 is untyped, so the Bedrock session factory is necessarily dynamic.
+ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
 # The prompt template intentionally contains long prose lines.
 "src/cm/prompt.py" = ["E501"]
+# Tests use loosely typed fakes and plain asserts.
+"tests/**" = ["ANN", "ARG"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ty.rules]
 all = "error"

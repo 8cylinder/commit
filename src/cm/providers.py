@@ -4,7 +4,7 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 import boto3
 from botocore.exceptions import (
@@ -48,7 +48,7 @@ class BedrockClaudeProvider:
         model: str,
         profile: str = "bedrock",
         region: str = "us-west-2",
-        session_factory: Callable[..., boto3.Session] | None = None,
+        session_factory: Callable[..., Any] | None = None,
     ) -> None:
         self.model = model
         self.profile = profile
