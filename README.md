@@ -6,12 +6,12 @@ and copies it to your clipboard.
 
 It supports two providers and can switch between them automatically:
 
-- **Claude on AWS Bedrock** — uses your existing AWS SSO profile (good for a work
-  machine with a `bedrock` profile).
-- **DeepSeek** — uses a DeepSeek API key (good for a personal machine).
+- **Claude on AWS Bedrock** — uses your existing AWS SSO profile.
+- **DeepSeek** — uses a DeepSeek API key.
 
 The message is generated from the diff, a file summary, and your last 20 commit
 messages so the tone and format stay consistent.
+
 
 ## Requirements
 
@@ -20,6 +20,7 @@ messages so the tone and format stay consistent.
 - One of:
   - AWS credentials with Bedrock access (profile `bedrock`), or
   - a DeepSeek API key
+
 
 ## Install
 
@@ -47,6 +48,7 @@ Run from a checkout without installing (uses the local project environment):
 uv run cm
 ```
 
+
 ## Usage
 
 ```bash
@@ -64,8 +66,6 @@ Clipboard support:
 - Linux (Wayland): `wl-copy`
 - Linux (X11): `xclip` or `xsel`
 
-If none of these are installed, `cm` prints the message and tells you to copy it
-manually.
 
 ## Configuration
 
