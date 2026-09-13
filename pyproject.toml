@@ -1,7 +1,7 @@
 [project]
 name = "cm"
 version = "0.1.0"
-description = "AI-powered git commit message generator using AWS Bedrock"
+description = "AI-powered git commit message generator with pluggable providers"
 readme = "README.md"
 authors = [
     { name = "Sheldon McGrandle", email = "developer@8cylinder.com" }
@@ -9,7 +9,15 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "boto3>=1.43.44",
+    "python-dotenv>=1.0.0",
     "rich>=15.0.0",
+    "ruff>=0.16.7",
+    "ty>=0.0.80",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
 ]
 
 [project.scripts]
