@@ -11,13 +11,13 @@ dependencies = [
     "boto3>=1.43.44",
     "python-dotenv>=1.0.0",
     "rich>=15.0.0",
-    "ruff>=0.16.7",
-    "ty>=0.0.80",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "ruff>=0.16.7",
+    "ty>=0.0.80",
 ]
 
 [project.scripts]
@@ -26,3 +26,34 @@ cm = "cm:main"
 [build-system]
 requires = ["uv_build>=0.11.17,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "C4",
+    "N",
+    "PTH",
+    "RUF",
+    "RET",
+    "ARG",
+    "TID",
+    "ANN",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The prompt template intentionally contains long prose lines.
+"src/cm/prompt.py" = ["E501"]
+
+[tool.ty.rules]
+all = "error"
+

@@ -38,13 +38,13 @@ dependencies = [
     { name = "boto3" },
     { name = "python-dotenv" },
     { name = "rich" },
-    { name = "ruff" },
-    { name = "ty" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "ruff" },
+    { name = "ty" },
 ]
 
 [package.metadata]
@@ -52,12 +52,14 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.43.44" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "rich", specifier = ">=15.0.0" },
-    { name = "ruff", specifier = ">=0.16.7" },
-    { name = "ty", specifier = ">=0.0.80" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.0.0" }]
+dev = [
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "ruff", specifier = ">=0.16.7" },
+    { name = "ty", specifier = ">=0.0.80" },
+]
 
 [[package]]
 name = "colorama"

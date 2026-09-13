@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from dotenv import load_dotenv
 
@@ -41,10 +41,12 @@ class Settings:
         *,
         provider: str | None = None,
         model: str | None = None,
-    ) -> "Settings":
+    ) -> Settings:
         env = os.environ if environ is None else environ
 
-        requested = (provider or env.get("CM_PROVIDER") or PROVIDER_AUTO).strip().lower()
+        requested = (
+            (provider or env.get("CM_PROVIDER") or PROVIDER_AUTO).strip().lower()
+        )
         if requested not in (*PROVIDERS, PROVIDER_AUTO):
             raise ConfigError(
                 f"Unknown CM_PROVIDER {requested!r}; expected one of "
@@ -132,4 +134,3 @@ def load_env_file(path: Path = DEFAULT_ENV_FILE) -> None:
     path = Path(path)
     if path.is_file():
         load_dotenv(path, override=False)
-

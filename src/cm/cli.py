@@ -45,7 +45,8 @@ def main(argv: list[str] | None = None) -> None:
         prog="cm", description="AI-powered git commit message generator"
     )
     parser.add_argument(
-        "-s", "--staged",
+        "-s",
+        "--staged",
         action="store_true",
         help="generate commit message for staged changes only",
     )

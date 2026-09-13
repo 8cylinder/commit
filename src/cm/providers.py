@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from typing import Callable, Protocol
+from collections.abc import Callable
+from typing import Protocol
 
 import boto3
 from botocore.exceptions import (
@@ -27,6 +28,12 @@ class AuthError(ProviderError):
     """A provider could not authenticate; the message carries a fix-it hint."""
 
 
+class HttpResponse(Protocol):
+    def read(self) -> bytes: ...
+
+    def close(self) -> None: ...
+
+
 class Provider(Protocol):
     name: str
 
@@ -41,7 +48,7 @@ class BedrockClaudeProvider:
         model: str,
         profile: str = "bedrock",
         region: str = "us-west-2",
-        session_factory: Callable | None = None,
+        session_factory: Callable[..., boto3.Session] | None = None,
     ) -> None:
         self.model = model
         self.profile = profile
@@ -90,12 +97,13 @@ class DeepSeekProvider:
         model: str,
         api_key: str,
         base_url: str = "https://api.deepseek.com",
-        urlopen: Callable | None = None,
+        urlopen: Callable[..., HttpResponse] | None = None,
         timeout: float = 120.0,
     ) -> None:
         if not api_key:
             raise AuthError(
-                f"DEEPSEEK_API_KEY is not set. Export it or add it to {DEFAULT_ENV_FILE}."
+                "DEEPSEEK_API_KEY is not set. Export it or add it to "
+                f"{DEFAULT_ENV_FILE}."
             )
         self.model = model
         self.api_key = api_key
@@ -132,7 +140,9 @@ class DeepSeekProvider:
                     "DeepSeek rejected the API key.\n"
                     "Check DEEPSEEK_API_KEY or run cm with --provider bedrock."
                 ) from exc
-            raise ProviderError(f"DeepSeek request failed with HTTP {exc.code}.") from exc
+            raise ProviderError(
+                f"DeepSeek request failed with HTTP {exc.code}."
+            ) from exc
         except urllib.error.URLError as exc:
             raise ProviderError(
                 f"Could not reach DeepSeek at {self.base_url}: {exc.reason}"
