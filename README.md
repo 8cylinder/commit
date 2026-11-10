@@ -50,25 +50,34 @@ uv tool install --editable .
 Run from a checkout without installing (uses the local project environment):
 
 ```bash
-uv run cm
+uv run cm generate
 ```
 
 
 ## Usage
 
 ```bash
-cm                            # all uncommitted changes (including untracked files)
-cm --staged                   # staged changes only
-cm --provider deepseek        # force DeepSeek
-cm --provider bedrock --model us.anthropic.claude-opus-4-6-v1
-cm --config                   # print the config file path
-cm --completions              # write bash completions
-cm --version                  # print the version from pyproject.toml
+cm generate                     # all uncommitted changes (including untracked files)
+cm --staged generate            # staged changes only
+cm --provider deepseek generate # force DeepSeek
+cm --provider bedrock --model us.anthropic.claude-opus-4-6-v1 generate
+cm --config                     # print the config file path
+cm --completions                # write bash completions
+cm --version                    # print the version from pyproject.toml
 ```
 
-### Arguments
+Options belong to the base `cm` command, so they must come before the
+subcommand. Running `cm` without a subcommand prints an error.
 
-| Argument | Description |
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `generate` | Generate a commit message from the selected changes, print it, and copy it to the clipboard. |
+
+### Options
+
+| Option | Description |
 | --- | --- |
 | `-h`, `--help` | Show help and exit. |
 | `--version` | Show the version (read from package metadata) and exit. |
@@ -78,7 +87,7 @@ cm --version                  # print the version from pyproject.toml
 | `--provider {auto,bedrock,deepseek}` | Choose the provider; defaults to auto-detection. |
 | `--model <id>` | Override the provider's model id. |
 
-The generated message is printed to stderr and copied to the clipboard.
+`cm generate` prints the generated message to stderr and copies it to the clipboard.
 
 Clipboard support:
 

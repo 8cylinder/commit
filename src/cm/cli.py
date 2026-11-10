@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
+from typing import cast
 
 import click
 from rich.console import Console
@@ -30,6 +32,13 @@ from .providers import (
 )
 
 PROVIDER_CHOICES = (PROVIDER_AUTO, *PROVIDERS)
+
+
+@dataclass(frozen=True)
+class GenerateOptions:
+    staged: bool
+    provider: str | None
+    model: str | None
 
 
 def build_provider(settings: Settings) -> Provider:
@@ -82,9 +91,9 @@ def _write_completions(
     ctx.exit()
 
 
-@click.command(
+@click.group(
     context_settings={"help_option_names": ["-h", "--help"]},
-    help="AI-powered git commit message generator.",
+    no_args_is_help=False,
 )
 @click.option(
     "-s",
@@ -120,7 +129,26 @@ def _write_completions(
     help="write static bash completions and exit",
 )
 @click.version_option(package_name="cm", prog_name="cm")
-def main(staged: bool, provider: str | None, model: str | None) -> None:
+@click.pass_context
+def main(
+    ctx: click.Context,
+    staged: bool,
+    provider: str | None,
+    model: str | None,
+) -> None:
+    """AI-powered git commit message generator.
+
+    Options are set on this base command and must come before a subcommand,
+    for example `cm --staged generate`.
+    """
+    ctx.obj = GenerateOptions(staged=staged, provider=provider, model=model)
+
+
+@main.command()
+@click.pass_context
+def generate(ctx: click.Context) -> None:
+    """Generate a commit message, print it, and copy it to the clipboard."""
+    options = cast(GenerateOptions, ctx.obj)
     console = Console(stderr=True)
 
     sample = ensure_config_dir()
@@ -135,15 +163,18 @@ def main(staged: bool, provider: str | None, model: str | None) -> None:
 
     load_env_file()
     try:
-        settings = Settings.from_env(provider=provider, model=model)
+        settings = Settings.from_env(
+            provider=options.provider,
+            model=options.model,
+        )
     except ConfigError as exc:
         console.print(f"[bold red]Error:[/] {exc}")
         sys.exit(1)
 
     selected_provider = build_provider(settings)
 
-    diff = git.get_diff(staged=staged)
-    stat = git.get_stat(staged=staged)
+    diff = git.get_diff(staged=options.staged)
+    stat = git.get_stat(staged=options.staged)
     user_prompt = prompt.build_prompt(diff, stat, git.get_recent_commits())
 
     try:

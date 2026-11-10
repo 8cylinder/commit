@@ -67,7 +67,7 @@ def test_main_prints_and_copies(
     captured = _capture(monkeypatch, provider)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
 
-    result = runner.invoke(cli.main, ["--provider", "deepseek"])
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "generate"])
 
     assert result.exit_code == 0
     assert len(provider.prompts) == 1
@@ -87,7 +87,7 @@ def test_main_passes_provider_and_model(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
 
     result = runner.invoke(
-        cli.main, ["--provider", "deepseek", "--model", "custom-model"]
+        cli.main, ["--provider", "deepseek", "--model", "custom-model", "generate"]
     )
 
     assert result.exit_code == 0
@@ -108,7 +108,7 @@ def test_main_reports_first_run_config(
     monkeypatch.setattr(cli, "copy_to_clipboard", lambda text: True)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
 
-    result = runner.invoke(cli.main, ["--provider", "deepseek"])
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "generate"])
 
     assert result.exit_code == 0
     assert "Created config directory" in result.stderr
@@ -121,7 +121,7 @@ def test_main_config_error_exits(
 ) -> None:
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
-    result = runner.invoke(cli.main, ["--provider", "deepseek"])
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "generate"])
 
     assert result.exit_code == 1
     assert "DEEPSEEK_API_KEY is not set" in result.stderr
@@ -135,7 +135,7 @@ def test_main_provider_error_exits(
     _capture(monkeypatch, FakeProvider(error=AuthError("nope")))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
 
-    result = runner.invoke(cli.main, ["--provider", "deepseek"])
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "generate"])
 
     assert result.exit_code == 1
     assert "nope" in result.stderr
@@ -149,10 +149,38 @@ def test_main_does_not_treat_message_as_markup(
     _capture(monkeypatch, FakeProvider(message="[bold]Generated[/]"))
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
 
-    result = runner.invoke(cli.main, ["--provider", "deepseek"])
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "generate"])
 
     assert result.exit_code == 0
     assert "[bold]Generated[/]" in result.stderr
+
+
+def test_bare_cm_errors(runner: CliRunner) -> None:
+    result = runner.invoke(cli.main, [])
+
+    assert result.exit_code == 2
+    assert "Missing command" in result.stderr
+
+
+def test_staged_flag_reaches_generate(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    no_side_effects: None,
+) -> None:
+    captured: dict[str, bool] = {}
+
+    def fake_get_diff(staged: bool = False) -> str:
+        captured["staged"] = staged
+        return "DIFF"
+
+    monkeypatch.setattr(cli.git, "get_diff", fake_get_diff)
+    _capture(monkeypatch, FakeProvider())
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+
+    result = runner.invoke(cli.main, ["--staged", "generate"])
+
+    assert result.exit_code == 0
+    assert captured["staged"] is True
 
 
 def test_help_supports_dash_h(runner: CliRunner) -> None:
@@ -162,6 +190,14 @@ def test_help_supports_dash_h(runner: CliRunner) -> None:
     assert "Usage:" in result.output
     assert "--completions" in result.output
     assert "--config" in result.output
+    assert "generate" in result.output
+
+
+def test_generate_help(runner: CliRunner) -> None:
+    result = runner.invoke(cli.main, ["generate", "--help"])
+
+    assert result.exit_code == 0
+    assert "Generate a commit message" in result.output
 
 
 def test_version_comes_from_package_metadata(runner: CliRunner) -> None:
