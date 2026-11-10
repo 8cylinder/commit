@@ -96,7 +96,8 @@ subcommand. Running `cm` without a subcommand prints an error.
 
 `cm commit` generates a message and opens a Textual editor. The editor shows line
 numbers and is 80 text columns wide, plus the line-number gutter. It has **Commit** and
-**Cancel** buttons; `Ctrl+S` commits and `Esc` cancels.
+**Cancel** buttons, and a shortcut bar at the bottom; `Ctrl+S` commits and closes, while
+`Ctrl+Q` (or `Esc`) quits without committing.
 
 - If staged changes exist, the message is generated from the staged diff and only
   staged changes are committed.

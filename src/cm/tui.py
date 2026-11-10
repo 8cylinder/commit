@@ -7,7 +7,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Static, TextArea
+from textual.widgets import Button, Footer, Static, TextArea
 
 from .git import GitError
 
@@ -59,12 +59,16 @@ class CommitApp(App[bool]):
     }
 
     #actions Button {
+        height: 1;
+        min-height: 1;
+        border: none;
         margin: 0 1;
     }
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("ctrl+s", "commit", "Commit"),
+        Binding("ctrl+q", "cancel", "Quit"),
         Binding("escape", "cancel", "Cancel"),
     ]
 
@@ -87,6 +91,7 @@ class CommitApp(App[bool]):
             with Horizontal(id="actions"):
                 yield Button("Commit", variant="primary", id="commit")
                 yield Button("Cancel", id="cancel")
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         editor = self.query_one("#message", TextArea)

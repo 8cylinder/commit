@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from textual.widgets import Static, TextArea
+from textual.widgets import Footer, Static, TextArea
 
 from cm.git import GitError
 from cm.tui import TEXT_COLUMNS, CommitApp
@@ -24,6 +24,9 @@ def test_loads_message_with_line_numbers_and_80_columns() -> None:
                 editor.scrollable_content_region.width - editor.gutter_width
                 == TEXT_COLUMNS
             )
+            assert app.query_one("#commit").size.height == 1
+            assert app.query_one("#cancel").size.height == 1
+            assert app.query_one(Footer).size.height == 1
 
             await pilot.press("escape")
 
@@ -55,6 +58,39 @@ def test_cancel_button_does_not_commit() -> None:
     async def run() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.click("#cancel")
+            await pilot.pause()
+
+    asyncio.run(run())
+
+    assert committed == []
+    assert app.return_value is False
+
+
+def test_ctrl_s_commits_and_exits() -> None:
+    committed: list[str] = []
+    app = CommitApp("initial", commit=committed.append)
+
+    async def run() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            editor = app.query_one("#message", TextArea)
+            editor.text = "keyboard commit"
+
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+
+    asyncio.run(run())
+
+    assert committed == ["keyboard commit"]
+    assert app.return_value is True
+
+
+def test_ctrl_q_quits_without_committing() -> None:
+    committed: list[str] = []
+    app = CommitApp("initial", commit=committed.append)
+
+    async def run() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.press("ctrl+q")
             await pilot.pause()
 
     asyncio.run(run())

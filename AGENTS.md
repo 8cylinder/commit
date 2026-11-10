@@ -75,7 +75,8 @@ The CLI is built with click.
   generates from all changes and **Commit** runs `git add --all` before committing.
   With `--staged`, nothing staged is an error. Cancelling never stages or commits.
 - `cm commit` opens a Textual `TextArea` with line numbers and 80 text columns plus the
-  gutter. It has Commit/Cancel buttons (`Ctrl+S`/`Esc`). A failed `git commit` keeps the
+  gutter. It has Commit/Cancel buttons, a footer with the key bindings (`Ctrl+S`
+  commits, `Ctrl+Q`/`Esc` quits without committing). A failed `git commit` keeps the
   editor open with the error. Textual is imported lazily so `cm generate` stays light.
 
 ## Behavior / gotchas
