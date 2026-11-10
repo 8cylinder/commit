@@ -43,7 +43,7 @@ def test_generated_script_is_static_bash_completion() -> None:
     assert "complete -o nosort -F _cm_completion cm" in script
     assert "compopt -o nosort" in script
     assert "auto bedrock deepseek" in script
-    assert 'compgen -W "generate"' in script
+    assert 'compgen -W "generate commit"' in script
     for option in (
         "-h",
         "--help",

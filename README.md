@@ -61,6 +61,8 @@ cm generate                     # all uncommitted changes (including untracked f
 cm --staged generate            # staged changes only
 cm --provider deepseek generate # force DeepSeek
 cm --provider bedrock --model us.anthropic.claude-opus-4-6-v1 generate
+cm commit                       # edit the generated message and commit
+cm --staged commit              # commit staged changes only
 cm --config                     # print the config file path
 cm --completions                # write bash completions
 cm --version                    # print the version from pyproject.toml
@@ -74,6 +76,7 @@ subcommand. Running `cm` without a subcommand prints an error.
 | Command | Description |
 | --- | --- |
 | `generate` | Generate a commit message from the selected changes, print it, and copy it to the clipboard. |
+| `commit` | Generate a message in an editable TUI, then commit with git. |
 
 ### Options
 
@@ -83,11 +86,25 @@ subcommand. Running `cm` without a subcommand prints an error.
 | `--version` | Show the version (read from package metadata) and exit. |
 | `--config` | Print the config file path and exit. |
 | `--completions` | Write a static bash completion script and exit. |
-| `-s`, `--staged` | Generate the message from staged changes only. |
+| `-s`, `--staged` | Generate from staged changes only. For `cm commit`, also require staged changes instead of auto-staging. |
 | `--provider {auto,bedrock,deepseek}` | Choose the provider; defaults to auto-detection. |
 | `--model <id>` | Override the provider's model id. |
 
 `cm generate` prints the generated message to stderr and copies it to the clipboard.
+
+### Commit TUI
+
+`cm commit` generates a message and opens a Textual editor. The editor shows line
+numbers and is 80 text columns wide, plus the line-number gutter. It has **Commit** and
+**Cancel** buttons; `Ctrl+S` commits and `Esc` cancels.
+
+- If staged changes exist, the message is generated from the staged diff and only
+  staged changes are committed.
+- If nothing is staged, the message is generated from all changes and **Commit**
+  stages everything first.
+- `--staged` disables auto-staging, so nothing staged is an error.
+- If `git commit` fails, the editor stays open with the error so you can fix the
+  message and retry. Cancelling does not stage or commit anything.
 
 Clipboard support:
 

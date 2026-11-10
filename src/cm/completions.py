@@ -12,7 +12,7 @@ MIN_BASH_VERSION = (4, 4)
 COMPLETION_FILENAME = APP_NAME
 
 _PROVIDER_CHOICES = "auto bedrock deepseek"
-_COMMANDS = "generate"
+_COMMANDS = "generate commit"
 _OPTIONS = "-h --help -s --staged --provider --model --config --completions --version"
 
 _BASH_COMPLETION = f"""\

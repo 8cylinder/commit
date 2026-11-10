@@ -1,19 +1,21 @@
 # AGENTS.md
 
 `cm` is a small CLI that generates a git commit message from the working-tree diff
-using a pluggable AI provider (AWS Bedrock or DeepSeek), prints it, and copies it to
-the clipboard. The CLI is built with click.
+using a pluggable AI provider (AWS Bedrock or DeepSeek). `cm generate` prints the
+message and copies it to the clipboard; `cm commit` opens a Textual editor and commits.
+The CLI is built with click.
 
 ## Commands
 
 - Run: `uv run cm generate` (or `uv run cm --staged generate`). `uv` manages the env
   and installs the `cm` entry point from `[project.scripts]`.
+- Commit via TUI: `uv run cm commit` (or `uv run cm --staged commit`).
 - Override selection:
-  `uv run cm --provider {auto,bedrock,deepseek} --model <id> generate`.
+  `uv run cm --provider {auto,bedrock,deepseek} --model <id> <command>`.
 - Print the config path: `uv run cm --config`.
 - Write bash completions: `uv run cm --completions`.
-- Bare `cm` is an error; a subcommand is required (currently only `generate`).
-  Options belong to the base command and must come before the subcommand.
+- Bare `cm` is an error; a subcommand is required (`generate` or `commit`). Options
+  belong to the base command and must come before the subcommand.
 - Tests: `make test` (or `uv run pytest`).
 - Lint / format: `make lint` / `make fmt` (or `uv run ruff check --fix .`,
   `uv run ruff format .`).
@@ -24,12 +26,13 @@ the clipboard. The CLI is built with click.
 
 ## Layout
 
-- `src/cm/cli.py` — click group, `generate` subcommand, orchestration,
+- `src/cm/cli.py` — click group, `generate`/`commit` subcommands, orchestration,
   `build_provider()` factory.
+- `src/cm/tui.py` — Textual `CommitApp`: editable message, Commit/Cancel buttons.
 - `src/cm/config.py` — `Settings.from_env()` resolution + `~/.config/cm/.env` loading.
 - `src/cm/completions.py` — static bash completion generation/installation.
 - `src/cm/providers.py` — `BedrockClaudeProvider`, `DeepSeekProvider`, `AuthError`.
-- `src/cm/git.py` — diff/stat/recent-commit helpers.
+- `src/cm/git.py` — diff/stat/recent-commit helpers plus commit/staging helpers.
 - `src/cm/prompt.py` — prompt template + `wrap_message`.
 - `src/cm/clipboard.py` — platform/session-aware clipboard copy.
 - `Makefile` — sync/fmt/lint/type/test/check/install/upgrade targets.
@@ -48,9 +51,9 @@ the clipboard. The CLI is built with click.
 
 ## CLI behavior
 
-- `cm` is a click group. `cm generate` does the work; bare `cm` fails with
-  `Missing command.` and exit code 2. Options live on the group and must precede the
-  subcommand (for example `cm --staged generate`).
+- `cm` is a click group. `cm generate` prints/copies the message; `cm commit` edits and
+  commits it. Bare `cm` fails with `Missing command.` and exit code 2. Options live on
+  the group and must precede the subcommand (for example `cm --staged generate`).
 - `-h` and `--help` both show help.
 - `--version` reads the version from package metadata (`pyproject.toml`); never
   hardcode a version in Python.
@@ -67,6 +70,13 @@ the clipboard. The CLI is built with click.
   in model output are not interpreted.
 - `cm generate` reads ALL uncommitted changes, including untracked files, not just
   staged ones. `--staged` restricts to `git diff --cached`.
+- `cm commit` scope: if staged changes exist, it generates from the staged diff and
+  commits only staged files. If nothing is staged and `--staged` is not given, it
+  generates from all changes and **Commit** runs `git add --all` before committing.
+  With `--staged`, nothing staged is an error. Cancelling never stages or commits.
+- `cm commit` opens a Textual `TextArea` with line numbers and 80 text columns plus the
+  gutter. It has Commit/Cancel buttons (`Ctrl+S`/`Esc`). A failed `git commit` keeps the
+  editor open with the error. Textual is imported lazily so `cm generate` stays light.
 
 ## Behavior / gotchas
 

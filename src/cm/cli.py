@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
@@ -55,6 +56,54 @@ def build_provider(settings: Settings) -> Provider:
     )
 
 
+def _load_settings(options: GenerateOptions, console: Console) -> Settings:
+    sample = ensure_config_dir()
+    if sample is not None:
+        console.print(
+            f"[dim]Created config directory [bold]{sample.parent}[/] and wrote a "
+            f"sample config to [bold]{sample}[/].[/]\n"
+            f"[dim]Copy it to [bold]{sample.with_name('.env')}[/] and fill in "
+            "DEEPSEEK_API_KEY to use DeepSeek; AWS SSO credentials work with no "
+            "config at all.[/]"
+        )
+
+    load_env_file()
+    try:
+        return Settings.from_env(
+            provider=options.provider,
+            model=options.model,
+        )
+    except ConfigError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        sys.exit(1)
+
+
+def _generate_message(
+    settings: Settings,
+    *,
+    staged: bool,
+    console: Console,
+) -> str:
+    selected_provider = build_provider(settings)
+
+    diff = git.get_diff(staged=staged)
+    stat = git.get_stat(staged=staged)
+    user_prompt = prompt.build_prompt(diff, stat, git.get_recent_commits())
+
+    try:
+        with Status("Generating commit message...", console=console):
+            return selected_provider.generate(user_prompt)
+    except ProviderError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        sys.exit(1)
+
+
+def _run_commit_app(message: str, commit: Callable[[str], object]) -> bool:
+    from .tui import CommitApp
+
+    return bool(CommitApp(message, commit=commit).run())
+
+
 def _print_config(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
     """Print the config file path and exit, without loading any config."""
     if not value or ctx.resilient_parsing:
@@ -99,7 +148,7 @@ def _write_completions(
     "-s",
     "--staged",
     is_flag=True,
-    help="generate commit message for staged changes only",
+    help="use staged changes only (no auto-staging for commit)",
 )
 @click.option(
     "--provider",
@@ -139,7 +188,7 @@ def main(
     """AI-powered git commit message generator.
 
     Options are set on this base command and must come before a subcommand,
-    for example `cm --staged generate`.
+    for example `cm --staged generate` or `cm --staged commit`.
     """
     ctx.obj = GenerateOptions(staged=staged, provider=provider, model=model)
 
@@ -151,38 +200,12 @@ def generate(ctx: click.Context) -> None:
     options = cast(GenerateOptions, ctx.obj)
     console = Console(stderr=True)
 
-    sample = ensure_config_dir()
-    if sample is not None:
-        console.print(
-            f"[dim]Created config directory [bold]{sample.parent}[/] and wrote a "
-            f"sample config to [bold]{sample}[/].[/]\n"
-            f"[dim]Copy it to [bold]{sample.with_name('.env')}[/] and fill in "
-            "DEEPSEEK_API_KEY to use DeepSeek; AWS SSO credentials work with no "
-            "config at all.[/]"
-        )
-
-    load_env_file()
-    try:
-        settings = Settings.from_env(
-            provider=options.provider,
-            model=options.model,
-        )
-    except ConfigError as exc:
-        console.print(f"[bold red]Error:[/] {exc}")
-        sys.exit(1)
-
-    selected_provider = build_provider(settings)
-
-    diff = git.get_diff(staged=options.staged)
-    stat = git.get_stat(staged=options.staged)
-    user_prompt = prompt.build_prompt(diff, stat, git.get_recent_commits())
-
-    try:
-        with Status("Generating commit message...", console=console):
-            message = selected_provider.generate(user_prompt)
-    except ProviderError as exc:
-        console.print(f"[bold red]Error:[/] {exc}")
-        sys.exit(1)
+    settings = _load_settings(options, console)
+    message = _generate_message(
+        settings,
+        staged=options.staged,
+        console=console,
+    )
 
     # The message is model output, so never interpret square brackets in it as
     # Rich markup.
@@ -192,3 +215,39 @@ def generate(ctx: click.Context) -> None:
             "[yellow]Note:[/] could not copy to the clipboard; the message is "
             "printed above. On Linux install wl-clipboard, xclip, or xsel."
         )
+
+
+@main.command()
+@click.pass_context
+def commit(ctx: click.Context) -> None:
+    """Generate a commit message in a TUI and commit the changes."""
+    options = cast(GenerateOptions, ctx.obj)
+    console = Console(stderr=True)
+
+    try:
+        have_staged = git.has_staged_changes()
+    except git.GitError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        sys.exit(1)
+
+    if options.staged and not have_staged:
+        console.print(
+            "[bold red]Error:[/] no staged changes. Stage changes first or "
+            "run `cm commit` without --staged."
+        )
+        sys.exit(1)
+
+    settings = _load_settings(options, console)
+
+    if have_staged:
+        commit_func = git.commit
+        staged = True
+    else:
+        commit_func = git.commit_all
+        staged = False
+
+    message = _generate_message(settings, staged=staged, console=console)
+    if _run_commit_app(message, commit_func):
+        console.print("[green]Committed.[/]")
+    else:
+        console.print("[yellow]Commit cancelled.[/]")

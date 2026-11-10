@@ -85,3 +85,80 @@ def test_get_stat_staged(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_get_recent_commits_strips(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(git.subprocess, "run", lambda *a, **k: _result("abc\ndef\n"))
     assert git.get_recent_commits() == "abc\ndef"
+
+
+def test_has_staged_changes_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(git.subprocess, "run", lambda *a, **k: _result("", 1))
+    assert git.has_staged_changes() is True
+
+
+def test_has_staged_changes_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(git.subprocess, "run", lambda *a, **k: _result(""))
+    assert git.has_staged_changes() is False
+
+
+def test_has_staged_changes_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        git.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(
+            [], 128, "", "fatal: not a git repository\n"
+        ),
+    )
+    with pytest.raises(git.GitError, match="not a git repository"):
+        git.has_staged_changes()
+
+
+def test_commit_sends_message_on_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(
+        command: RunArgs, **kwargs: RunKwargs
+    ) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured["input"] = kwargs["input"]
+        return _result("committed\n")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+    assert git.commit("Subject\n\nBody") == "committed"
+    assert captured["command"] == ["git", "commit", "-F", "-"]
+    assert captured["input"] == "Subject\n\nBody\n"
+
+
+def test_commit_raises_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        git.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess([], 1, "", "hook failed\n"),
+    )
+    with pytest.raises(git.GitError, match="hook failed"):
+        git.commit("Subject")
+
+
+def test_commit_all_stages_then_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[RunArgs] = []
+
+    def fake_run(
+        command: RunArgs, **kwargs: RunKwargs
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return _result("committed\n")
+
+    monkeypatch.setattr(git.subprocess, "run", fake_run)
+    assert git.commit_all("Subject") == "committed"
+    assert calls == [
+        ["git", "add", "--all"],
+        ["git", "commit", "-F", "-"],
+    ]
+
+
+def test_commit_all_raises_when_staging_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        git.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess([], 1, "", "add failed\n"),
+    )
+    with pytest.raises(git.GitError, match="add failed"):
+        git.commit_all("Subject")

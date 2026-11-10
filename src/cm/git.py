@@ -4,12 +4,28 @@ import subprocess
 import sys
 
 
+class GitError(Exception):
+    """A git operation failed."""
+
+
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args],
         capture_output=True,
         text=True,
     )
+
+
+def _run_git(*args: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return _git(*args)
+    except OSError as exc:
+        raise GitError(f"could not run git: {exc}") from exc
+
+
+def _git_error(result: subprocess.CompletedProcess[str], fallback: str) -> GitError:
+    detail = result.stderr.strip() or result.stdout.strip() or fallback
+    return GitError(detail)
 
 
 def get_diff(staged: bool = False) -> str:
@@ -57,6 +73,41 @@ def get_stat(staged: bool = False) -> str:
         for f in untracked_files:
             result += f"  {f}\n"
     return result
+
+
+def has_staged_changes() -> bool:
+    """Return True when the index differs from HEAD."""
+    result = _run_git("diff", "--cached", "--quiet")
+    if result.returncode == 0:
+        return False
+    if result.returncode == 1:
+        return True
+    raise _git_error(result, "not a git repository or git not available")
+
+
+def commit(message: str) -> str:
+    """Commit the staged changes with the given message."""
+    try:
+        result = subprocess.run(
+            ["git", "commit", "-F", "-"],
+            input=message.rstrip() + "\n",
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        raise GitError(f"could not run git: {exc}") from exc
+
+    if result.returncode != 0:
+        raise _git_error(result, "git commit failed")
+    return result.stdout.strip()
+
+
+def commit_all(message: str) -> str:
+    """Stage all changes, then commit them with the given message."""
+    result = _run_git("add", "--all")
+    if result.returncode != 0:
+        raise _git_error(result, "git add failed")
+    return commit(message)
 
 
 def get_recent_commits() -> str:
