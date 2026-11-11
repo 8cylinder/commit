@@ -16,7 +16,7 @@ from botocore.exceptions import (
     TokenRetrievalError,
 )
 
-from .config import DEFAULT_ENV_FILE
+from .config import config_path
 from .prompt import wrap_message
 
 
@@ -103,7 +103,7 @@ class DeepSeekProvider:
         if not api_key:
             raise AuthError(
                 "DEEPSEEK_API_KEY is not set. Export it or add it to "
-                f"{DEFAULT_ENV_FILE}."
+                f"{config_path()}."
             )
         self.model = model
         self.api_key = api_key

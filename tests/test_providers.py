@@ -112,7 +112,9 @@ def _deepseek_provider(
     captured_requests: list[urllib.request.Request] = []
     captured_timeouts: list[float] = []
 
-    def urlopen(request: urllib.request.Request, timeout: float) -> HttpResponse:
+    def urlopen(
+        request: urllib.request.Request, timeout: float
+    ) -> HttpResponse:
         captured_requests.append(request)
         captured_timeouts.append(timeout)
         if error is not None:

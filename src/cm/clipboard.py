@@ -51,13 +51,17 @@ def clipboard_commands(
     return [list(command) for command in order if _available(command)]
 
 
-def clipboard_command(environ: Mapping[str, str] | None = None) -> list[str] | None:
+def clipboard_command(
+    environ: Mapping[str, str] | None = None,
+) -> list[str] | None:
     """Return the preferred clipboard command, or None if none are available."""
     commands = clipboard_commands(environ)
     return commands[0] if commands else None
 
 
-def copy_to_clipboard(text: str, environ: Mapping[str, str] | None = None) -> bool:
+def copy_to_clipboard(
+    text: str, environ: Mapping[str, str] | None = None
+) -> bool:
     """Copy text to the clipboard, trying each candidate until one succeeds.
 
     Clipboard tools such as wl-copy and xclip fork a daemon that can keep

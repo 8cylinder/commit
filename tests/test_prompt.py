@@ -4,7 +4,9 @@ from cm.prompt import build_prompt, wrap_message
 
 
 def test_build_prompt_includes_all_context() -> None:
-    prompt = build_prompt("DIFF-CONTENT", "STAT-CONTENT", "abc123 recent commit")
+    prompt = build_prompt(
+        "DIFF-CONTENT", "STAT-CONTENT", "abc123 recent commit"
+    )
 
     assert "DIFF-CONTENT" in prompt
     assert "STAT-CONTENT" in prompt

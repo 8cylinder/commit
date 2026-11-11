@@ -1,19 +1,33 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
-dist/
-build/
 .venv/
-.env
-.env.*
-*.pem
-*.key
-*.whl
+venv/
+build/
+dist/
+
+# Tool caches
 .pytest_cache/
 .ruff_cache/
+.ty_cache/
 .mypy_cache/
 .coverage
+.coverage.*
 htmlcov/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editors and OS
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db
+
+# Local reference material
 app-base.org

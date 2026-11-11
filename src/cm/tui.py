@@ -106,7 +106,9 @@ class CommitApp(App[bool]):
 
     def _resize_editor(self) -> None:
         editor = self.query_one("#message", TextArea)
-        editor.styles.width = TEXT_COLUMNS + editor.gutter_width + EDITOR_CHROME_WIDTH
+        editor.styles.width = (
+            TEXT_COLUMNS + editor.gutter_width + EDITOR_CHROME_WIDTH
+        )
 
     def _show_error(self, message: str) -> None:
         self.query_one("#error", Static).update(message)

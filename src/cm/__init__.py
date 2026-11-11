@@ -1,3 +1,3 @@
-from .cli import main
+"""cm: AI-powered git commit message generator."""
 
-__all__ = ["main"]
+__all__: list[str] = []

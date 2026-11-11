@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+import platformdirs
+
+APP_NAME = "cm"
 
 PROVIDER_AUTO = "auto"
 PROVIDER_BEDROCK = "bedrock"
@@ -18,11 +21,67 @@ DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-4-6-v1"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_MODEL = "deepseek-flash"
 
-DEFAULT_ENV_FILE = Path.home() / ".config" / "cm" / ".env"
+CONFIG_KEYS = frozenset(
+    {
+        "provider",
+        "model",
+        "aws_profile",
+        "aws_region",
+        "deepseek_api_key",
+        "deepseek_base_url",
+    }
+)
 
 
 class ConfigError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class ConfigFile:
+    path: Path
+    values: Mapping[str, str]
+    unknown_keys: tuple[str, ...] = ()
+
+
+def config_path() -> Path:
+    """Return the platform-specific path to config.toml."""
+    return Path(platformdirs.user_config_dir(APP_NAME)) / "config.toml"
+
+
+def load_config(path: Path | None = None) -> ConfigFile:
+    """Read config.toml and validate its top-level keys.
+
+    A missing file is not an error and yields empty values. Invalid TOML or a
+    value with the wrong type raises ConfigError naming the path.
+    """
+    path = config_path() if path is None else Path(path)
+    if not path.is_file():
+        return ConfigFile(path=path, values={})
+
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: invalid TOML: {exc}") from exc
+    except OSError as exc:
+        raise ConfigError(f"{path}: could not read config: {exc}") from exc
+
+    values: dict[str, str] = {}
+    unknown: list[str] = []
+    for key, value in data.items():
+        if key not in CONFIG_KEYS:
+            unknown.append(key)
+            continue
+        if not isinstance(value, str):
+            raise ConfigError(f"{path}: {key!r} must be a string")
+        values[key] = value
+
+    return ConfigFile(
+        path=path,
+        values=values,
+        unknown_keys=tuple(sorted(unknown)),
+    )
 
 
 @dataclass(frozen=True)
@@ -35,102 +94,95 @@ class Settings:
     deepseek_base_url: str
 
     @classmethod
-    def from_env(
+    def from_sources(
         cls,
+        config: Mapping[str, str] | None = None,
         environ: Mapping[str, str] | None = None,
         *,
         provider: str | None = None,
         model: str | None = None,
     ) -> Settings:
+        """Resolve settings from CLI flags, environment, config, and defaults.
+
+        Precedence is command-line option > environment variable > config.toml
+        > built-in default.
+        """
+        values: Mapping[str, str] = (
+            config if config is not None else dict[str, str]()
+        )
         env = os.environ if environ is None else environ
 
-        requested = (
-            (provider or env.get("CM_PROVIDER") or PROVIDER_AUTO).strip().lower()
+        requested: str = (
+            (
+                provider
+                or env.get("CM_PROVIDER")
+                or values.get("provider")
+                or PROVIDER_AUTO
+            )
+            .strip()
+            .lower()
         )
         if requested not in (*PROVIDERS, PROVIDER_AUTO):
             raise ConfigError(
-                f"Unknown CM_PROVIDER {requested!r}; expected one of "
+                f"Unknown provider {requested!r}; expected one of "
                 f"{', '.join((*PROVIDERS, PROVIDER_AUTO))}."
             )
 
-        deepseek_api_key = env.get("DEEPSEEK_API_KEY") or None
+        deepseek_api_key = (
+            env.get("DEEPSEEK_API_KEY")
+            or values.get("deepseek_api_key")
+            or None
+        )
 
+        selected: str
         if requested == PROVIDER_AUTO:
-            provider = PROVIDER_DEEPSEEK if deepseek_api_key else PROVIDER_BEDROCK
+            selected = (
+                PROVIDER_DEEPSEEK if deepseek_api_key else PROVIDER_BEDROCK
+            )
         else:
-            provider = requested
+            selected = requested
 
-        if provider == PROVIDER_DEEPSEEK and not deepseek_api_key:
+        if selected == PROVIDER_DEEPSEEK and not deepseek_api_key:
             raise ConfigError(
                 "DEEPSEEK_API_KEY is not set. Export it or add it to "
-                f"{DEFAULT_ENV_FILE}."
+                f"{config_path()}."
             )
 
-        if provider == PROVIDER_DEEPSEEK:
-            model = (
+        selected_model: str
+        if selected == PROVIDER_DEEPSEEK:
+            selected_model = (
                 model
                 or env.get("CM_MODEL")
                 or env.get("CM_DEEPSEEK_MODEL")
+                or values.get("model")
                 or DEFAULT_DEEPSEEK_MODEL
             )
         else:
-            model = (
+            selected_model = (
                 model
                 or env.get("CM_MODEL")
                 or env.get("CM_BEDROCK_MODEL")
+                or values.get("model")
                 or DEFAULT_BEDROCK_MODEL
             )
 
         return cls(
-            provider=provider,
-            model=model,
-            aws_profile=env.get("CM_AWS_PROFILE") or DEFAULT_AWS_PROFILE,
-            aws_region=env.get("CM_AWS_REGION") or DEFAULT_AWS_REGION,
+            provider=selected,
+            model=selected_model,
+            aws_profile=(
+                env.get("CM_AWS_PROFILE")
+                or values.get("aws_profile")
+                or DEFAULT_AWS_PROFILE
+            ),
+            aws_region=(
+                env.get("CM_AWS_REGION")
+                or values.get("aws_region")
+                or DEFAULT_AWS_REGION
+            ),
             deepseek_api_key=deepseek_api_key,
-            deepseek_base_url=env.get("DEEPSEEK_BASE_URL") or DEFAULT_DEEPSEEK_BASE_URL,
+            deepseek_base_url=(
+                env.get("DEEPSEEK_BASE_URL")
+                or values.get("deepseek_base_url")
+                or DEFAULT_DEEPSEEK_BASE_URL
+            ),
         )
-
-
-SAMPLE_ENV = """\
-# cm configuration. Copy this file to .env and edit as needed.
-#
-# Provider selection: auto | bedrock | deepseek. When unset, cm uses
-# DeepSeek if DEEPSEEK_API_KEY is set, otherwise AWS Bedrock.
-# CM_PROVIDER=auto
-
-# DeepSeek (e.g. personal machines)
-# DEEPSEEK_API_KEY=
-# DEEPSEEK_BASE_URL=https://api.deepseek.com
-# CM_DEEPSEEK_MODEL=deepseek-flash
-
-# AWS Bedrock (e.g. work machines; uses the `bedrock` SSO profile)
-# CM_AWS_PROFILE=bedrock
-# CM_AWS_REGION=us-west-2
-# CM_BEDROCK_MODEL=us.anthropic.claude-opus-4-6-v1
-
-# Universal model override (wins over the provider-specific variables above)
-# CM_MODEL=
-"""
-
-
-def ensure_config_dir(path: Path = DEFAULT_ENV_FILE) -> Path | None:
-    """Create the config directory and a sample .env if the directory is missing.
-
-    Does nothing when the directory already exists, so a deliberately removed
-    sample is not recreated. Returns the sample path when the directory was
-    created, otherwise None.
-    """
-    path = Path(path)
-    directory = path.parent
-    if directory.exists():
-        return None
-    directory.mkdir(parents=True, exist_ok=True)
-    sample = directory / ".env.sample"
-    sample.write_text(SAMPLE_ENV, encoding="utf-8")
-    return sample
-
-
-def load_env_file(path: Path = DEFAULT_ENV_FILE) -> None:
-    path = Path(path)
-    if path.is_file():
-        load_dotenv(path, override=False)

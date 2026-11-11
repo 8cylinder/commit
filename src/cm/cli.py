@@ -1,29 +1,32 @@
 from __future__ import annotations
 
+import importlib.metadata
+import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, NoReturn, cast
 
 import click
 from rich.console import Console
+from rich.markup import escape
 from rich.status import Status
 
 from . import git, prompt
 from .clipboard import copy_to_clipboard
 from .completions import (
+    APP_NAME,
     MIN_BASH_VERSION,
-    install_completion,
+    install_bash_completion,
     installed_bash_version,
 )
 from .config import (
-    DEFAULT_ENV_FILE,
     PROVIDER_AUTO,
     PROVIDERS,
     ConfigError,
     Settings,
-    ensure_config_dir,
-    load_env_file,
+    config_path,
+    load_config,
 )
 from .providers import (
     BedrockClaudeProvider,
@@ -33,13 +36,36 @@ from .providers import (
 )
 
 PROVIDER_CHOICES = (PROVIDER_AUTO, *PROVIDERS)
+COLOR_CHOICES = ("auto", "always", "never")
+
+
+class AppCommand(click.Command):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        context_settings = dict(kwargs.pop("context_settings", {}) or {})
+        context_settings.setdefault("help_option_names", ["-h", "--help"])
+        super().__init__(*args, context_settings=context_settings, **kwargs)
+
+
+class AppGroup(click.Group):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        context_settings = dict(kwargs.pop("context_settings", {}) or {})
+        context_settings.setdefault("help_option_names", ["-h", "--help"])
+        super().__init__(*args, context_settings=context_settings, **kwargs)
 
 
 @dataclass(frozen=True)
-class GenerateOptions:
+class CliOptions:
     staged: bool
     provider: str | None
     model: str | None
+
+
+@dataclass
+class CliContext:
+    options: CliOptions
+    console: Console
+    error_console: Console
+    config: dict[str, str] | None = None
 
 
 def build_provider(settings: Settings) -> Provider:
@@ -56,33 +82,71 @@ def build_provider(settings: Settings) -> Provider:
     )
 
 
-def _load_settings(options: GenerateOptions, console: Console) -> Settings:
-    sample = ensure_config_dir()
-    if sample is not None:
-        console.print(
-            f"[dim]Created config directory [bold]{sample.parent}[/] and wrote a "
-            f"sample config to [bold]{sample}[/].[/]\n"
-            f"[dim]Copy it to [bold]{sample.with_name('.env')}[/] and fill in "
-            "DEEPSEEK_API_KEY to use DeepSeek; AWS SSO credentials work with no "
-            "config at all.[/]"
+def _consoles(color: str) -> tuple[Console, Console]:
+    if color == "always":
+        return (
+            Console(force_terminal=True, no_color=False),
+            Console(stderr=True, force_terminal=True, no_color=False),
+        )
+    if color == "never":
+        return (
+            Console(force_terminal=False, no_color=True),
+            Console(stderr=True, force_terminal=False, no_color=True),
         )
 
-    load_env_file()
+    force_color = os.environ.get("FORCE_COLOR")
+    no_color = False if force_color is not None and force_color != "0" else None
+    return (
+        Console(no_color=no_color),
+        Console(stderr=True, no_color=no_color),
+    )
+
+
+def _ctx_color(color: str) -> bool | None:
+    if color == "always":
+        return True
+    if color == "never":
+        return False
+    return None
+
+
+def _fail(console: Console, exc: Exception) -> NoReturn:
+    console.print(f"[bold red]error:[/] {escape(str(exc))}")
+    raise click.exceptions.Exit(1)
+
+
+def _load_config(obj: CliContext) -> dict[str, str]:
+    if obj.config is not None:
+        return obj.config
+
     try:
-        return Settings.from_env(
-            provider=options.provider,
-            model=options.model,
-        )
+        loaded = load_config()
     except ConfigError as exc:
-        console.print(f"[bold red]Error:[/] {exc}")
-        sys.exit(1)
+        _fail(obj.error_console, exc)
+
+    for key in loaded.unknown_keys:
+        obj.error_console.print(
+            f"[yellow]warning:[/] ignoring unknown config key "
+            f"{escape(key)!r} in {escape(str(loaded.path))}"
+        )
+
+    obj.config = dict(loaded.values)
+    return obj.config
+
+
+def _settings(obj: CliContext) -> Settings:
+    return Settings.from_sources(
+        _load_config(obj),
+        provider=obj.options.provider,
+        model=obj.options.model,
+    )
 
 
 def _generate_message(
     settings: Settings,
     *,
     staged: bool,
-    console: Console,
+    error_console: Console,
 ) -> str:
     selected_provider = build_provider(settings)
 
@@ -90,12 +154,8 @@ def _generate_message(
     stat = git.get_stat(staged=staged)
     user_prompt = prompt.build_prompt(diff, stat, git.get_recent_commits())
 
-    try:
-        with Status("Generating commit message...", console=console):
-            return selected_provider.generate(user_prompt)
-    except ProviderError as exc:
-        console.print(f"[bold red]Error:[/] {exc}")
-        sys.exit(1)
+    with Status("Generating commit message...", console=error_console):
+        return selected_provider.generate(user_prompt)
 
 
 def _run_commit_app(message: str, commit: Callable[[str], object]) -> bool:
@@ -104,11 +164,13 @@ def _run_commit_app(message: str, commit: Callable[[str], object]) -> bool:
     return bool(CommitApp(message, commit=commit).run())
 
 
-def _print_config(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
+def _print_config(
+    ctx: click.Context, _param: click.Parameter, value: bool
+) -> None:
     """Print the config file path and exit, without loading any config."""
     if not value or ctx.resilient_parsing:
         return
-    click.echo(DEFAULT_ENV_FILE)
+    click.echo(config_path())
     ctx.exit()
 
 
@@ -119,16 +181,34 @@ def _write_completions(
     if not value or ctx.resilient_parsing:
         return
 
-    path = install_completion()
-    click.echo(f"Wrote bash completion for cm to {path}")
-    click.echo(f"Run this to enable it in the current terminal:\n  source {path}")
+    group = cast(click.Group, ctx.command)
+    path = install_bash_completion(
+        group,
+        ctx.info_name or APP_NAME,
+        importlib.metadata.version("cm"),
+    )
+    click.echo(path)
+    click.echo(f"To use it in this shell:\n  source {path}", err=True)
 
     version = installed_bash_version()
-    if version is not None and version < MIN_BASH_VERSION:
-        required = ".".join(str(part) for part in MIN_BASH_VERSION)
+    required = ".".join(str(part) for part in MIN_BASH_VERSION)
+    if version is None:
+        click.echo(
+            "Warning: could not determine the bash version on PATH; the "
+            f"completion script needs bash {required} or newer.",
+            err=True,
+        )
+        if sys.platform == "darwin":
+            click.echo(
+                "On macOS /bin/bash is 3.2; install a newer bash (for example "
+                "with Homebrew). Zsh completions are not generated.",
+                err=True,
+            )
+    elif version < MIN_BASH_VERSION:
         click.echo(
             f"Warning: bash {version[0]}.{version[1]} on PATH is older than "
-            f"{required}; the completion script needs bash {required} or newer.",
+            f"{required}; the completion script needs bash {required} "
+            "or newer.",
             err=True,
         )
         if sys.platform == "darwin":
@@ -141,8 +221,19 @@ def _write_completions(
 
 
 @click.group(
-    context_settings={"help_option_names": ["-h", "--help"]},
+    cls=AppGroup,
+    invoke_without_command=True,
     no_args_is_help=False,
+    epilog=(
+        "\b\nExamples:\n  cm generate\n  cm --staged generate\n  cm commit"
+    ),
+)
+@click.option(
+    "--color",
+    type=click.Choice(COLOR_CHOICES, case_sensitive=False),
+    default="auto",
+    show_default=True,
+    help="Control colored output (auto, always, never).",
 )
 @click.option(
     "-s",
@@ -181,6 +272,7 @@ def _write_completions(
 @click.pass_context
 def main(
     ctx: click.Context,
+    color: str,
     staged: bool,
     provider: str | None,
     model: str | None,
@@ -190,64 +282,77 @@ def main(
     Options are set on this base command and must come before a subcommand,
     for example `cm --staged generate` or `cm --staged commit`.
     """
-    ctx.obj = GenerateOptions(staged=staged, provider=provider, model=model)
+    console, error_console = _consoles(color)
+    ctx.color = _ctx_color(color)
+
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help(), color=ctx.color)
+        ctx.exit(0)
+
+    ctx.obj = CliContext(
+        options=CliOptions(staged=staged, provider=provider, model=model),
+        console=console,
+        error_console=error_console,
+    )
 
 
-@main.command()
+@main.command(cls=AppCommand)
 @click.pass_context
 def generate(ctx: click.Context) -> None:
-    """Generate a commit message, print it, and copy it to the clipboard."""
-    options = cast(GenerateOptions, ctx.obj)
-    console = Console(stderr=True)
+    """Generate a commit message and copy it to the clipboard."""
+    obj = cast(CliContext, ctx.obj)
 
-    settings = _load_settings(options, console)
-    message = _generate_message(
-        settings,
-        staged=options.staged,
-        console=console,
-    )
+    try:
+        settings = _settings(obj)
+        message = _generate_message(
+            settings,
+            staged=obj.options.staged,
+            error_console=obj.error_console,
+        )
+    except (ConfigError, ProviderError, git.GitError) as exc:
+        _fail(obj.error_console, exc)
 
     # The message is model output, so never interpret square brackets in it as
     # Rich markup.
-    console.print(message, markup=False, highlight=False)
+    obj.console.print(message, markup=False, highlight=False)
     if not copy_to_clipboard(message + "\n"):
-        console.print(
-            "[yellow]Note:[/] could not copy to the clipboard; the message is "
-            "printed above. On Linux install wl-clipboard, xclip, or xsel."
+        obj.error_console.print(
+            "[yellow]warning:[/] could not copy to the clipboard; the message "
+            "is printed above. On Linux install wl-clipboard, xclip, or xsel."
         )
 
 
-@main.command()
+@main.command(cls=AppCommand)
 @click.pass_context
 def commit(ctx: click.Context) -> None:
     """Generate a commit message in a TUI and commit the changes."""
-    options = cast(GenerateOptions, ctx.obj)
-    console = Console(stderr=True)
+    obj = cast(CliContext, ctx.obj)
 
     try:
         have_staged = git.has_staged_changes()
-    except git.GitError as exc:
-        console.print(f"[bold red]Error:[/] {exc}")
-        sys.exit(1)
+        if obj.options.staged and not have_staged:
+            raise git.GitError(
+                "no staged changes. Stage changes first or run `cm commit` "
+                "without --staged."
+            )
 
-    if options.staged and not have_staged:
-        console.print(
-            "[bold red]Error:[/] no staged changes. Stage changes first or "
-            "run `cm commit` without --staged."
+        settings = _settings(obj)
+        if have_staged:
+            commit_func = git.commit
+            staged = True
+        else:
+            commit_func = git.commit_all
+            staged = False
+
+        message = _generate_message(
+            settings,
+            staged=staged,
+            error_console=obj.error_console,
         )
-        sys.exit(1)
+    except (ConfigError, ProviderError, git.GitError) as exc:
+        _fail(obj.error_console, exc)
 
-    settings = _load_settings(options, console)
-
-    if have_staged:
-        commit_func = git.commit
-        staged = True
-    else:
-        commit_func = git.commit_all
-        staged = False
-
-    message = _generate_message(settings, staged=staged, console=console)
     if _run_commit_app(message, commit_func):
-        console.print("[green]Committed.[/]")
+        obj.error_console.print("[green]committed[/]")
     else:
-        console.print("[yellow]Commit cancelled.[/]")
+        obj.error_console.print("[yellow]commit cancelled[/]")

@@ -7,23 +7,31 @@ authors = [
     { name = "Sheldon McGrandle", email = "developer@8cylinder.com" }
 ]
 requires-python = ">=3.13"
+license = "GPL-2.0-only"
+license-files = ["LICENSE"]
 dependencies = [
     "boto3>=1.43.44",
     "click>=8.3.0",
-    "python-dotenv>=1.0.0",
+    "platformdirs>=4.0.0",
     "rich>=15.0.0",
     "textual>=8.2.8",
 ]
 
+[project.urls]
+Homepage = "https://github.com/8cylinder/commit"
+Repository = "https://github.com/8cylinder/commit"
+Issues = "https://github.com/8cylinder/commit/issues"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.16.7",
     "ty>=0.0.80",
 ]
 
 [project.scripts]
-cm = "cm:main"
+cm = "cm.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.17,<0.12.0"]
@@ -31,7 +39,7 @@ build-backend = "uv_build"
 
 [tool.ruff]
 target-version = "py313"
-line-length = 88
+line-length = 80
 
 [tool.ruff.lint]
 select = [
@@ -50,6 +58,8 @@ select = [
     "ARG",
     "TID",
     "ANN",
+    "PGH003",
+    "PYI",
 ]
 # boto3 is untyped, so the Bedrock session factory is necessarily dynamic.
 ignore = ["ANN401"]
@@ -62,7 +72,15 @@ ignore = ["ANN401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config --cov=cm --cov-branch --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["cm"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
 
 [tool.ty.rules]
 all = "error"
-

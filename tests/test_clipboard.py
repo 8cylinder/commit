@@ -36,7 +36,11 @@ def test_darwin_without_pbcopy(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_wayland_prefers_wl_copy(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_platform(monkeypatch, "linux", {"wl-copy", "xclip"})
     commands = clipboard.clipboard_commands(
-        {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}
+        {
+            "XDG_SESSION_TYPE": "wayland",
+            "WAYLAND_DISPLAY": "wayland-0",
+            "DISPLAY": ":0",
+        }
     )
     assert commands[0] == ["wl-copy"]
     assert ["xclip", "-selection", "clipboard"] in commands
@@ -67,7 +71,9 @@ def test_unknown_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     assert clipboard.clipboard_commands() == []
 
 
-def test_copy_uses_devnull_and_no_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_copy_uses_devnull_and_no_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[dict[str, object]] = []
 
     def fake_run(command: list[str], **kwargs: object) -> _Completed:
@@ -89,7 +95,9 @@ def test_copy_uses_devnull_and_no_capture(monkeypatch: pytest.MonkeyPatch) -> No
     assert "capture_output" not in call
 
 
-def test_copy_falls_through_to_next_command(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_copy_falls_through_to_next_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[str] = []
 
     def fake_run(command: list[str], **kwargs: object) -> _Completed:
@@ -99,7 +107,10 @@ def test_copy_falls_through_to_next_command(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(
         clipboard,
         "clipboard_commands",
-        lambda environ=None: [["wl-copy"], ["xclip", "-selection", "clipboard"]],
+        lambda environ=None: [
+            ["wl-copy"],
+            ["xclip", "-selection", "clipboard"],
+        ],
     )
     monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
 
@@ -107,8 +118,12 @@ def test_copy_falls_through_to_next_command(monkeypatch: pytest.MonkeyPatch) -> 
     assert seen == ["wl-copy", "xclip"]
 
 
-def test_copy_returns_false_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(clipboard, "clipboard_commands", lambda environ=None: [])
+def test_copy_returns_false_without_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        clipboard, "clipboard_commands", lambda environ=None: []
+    )
     assert clipboard.copy_to_clipboard("x") is False
 
 

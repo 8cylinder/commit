@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 
 
 class GitError(Exception):
@@ -23,55 +22,53 @@ def _run_git(*args: str) -> subprocess.CompletedProcess[str]:
         raise GitError(f"could not run git: {exc}") from exc
 
 
-def _git_error(result: subprocess.CompletedProcess[str], fallback: str) -> GitError:
+def _git_error(
+    result: subprocess.CompletedProcess[str], fallback: str
+) -> GitError:
     detail = result.stderr.strip() or result.stdout.strip() or fallback
     return GitError(detail)
 
 
 def get_diff(staged: bool = False) -> str:
     if staged:
-        diff = _git("diff", "--cached")
+        diff = _run_git("diff", "--cached")
         if diff.returncode != 0:
-            print("Error: not a git repository or git not available", file=sys.stderr)
-            sys.exit(1)
+            raise _git_error(diff, "not a git repository or git not available")
         if not diff.stdout.strip():
-            print("Error: no staged changes.", file=sys.stderr)
-            sys.exit(1)
+            raise GitError("no staged changes.")
         return diff.stdout
 
-    diff = _git("diff")
+    diff = _run_git("diff")
     if diff.returncode != 0:
-        print("Error: not a git repository or git not available", file=sys.stderr)
-        sys.exit(1)
+        raise _git_error(diff, "not a git repository or git not available")
 
-    untracked = _git("ls-files", "--others", "--exclude-standard")
+    untracked = _run_git("ls-files", "--others", "--exclude-standard")
     untracked_files = untracked.stdout.strip().splitlines()
 
     untracked_content = ""
     for filepath in untracked_files:
-        content = _git("diff", "--no-index", "/dev/null", filepath)
+        content = _run_git("diff", "--no-index", "/dev/null", filepath)
         untracked_content += content.stdout
 
     combined = diff.stdout + untracked_content
     if not combined.strip():
-        print("Error: no uncommitted changes.", file=sys.stderr)
-        sys.exit(1)
+        raise GitError("no uncommitted changes.")
     return combined
 
 
 def get_stat(staged: bool = False) -> str:
     if staged:
-        return _git("diff", "--cached", "--stat").stdout
+        return _run_git("diff", "--cached", "--stat").stdout
 
-    stat = _git("diff", "--stat")
-    untracked = _git("ls-files", "--others", "--exclude-standard")
+    stat = _run_git("diff", "--stat")
+    untracked = _run_git("ls-files", "--others", "--exclude-standard")
     untracked_files = untracked.stdout.strip().splitlines()
 
     result = stat.stdout
     if untracked_files:
         result += "\nNew untracked files:\n"
-        for f in untracked_files:
-            result += f"  {f}\n"
+        for path in untracked_files:
+            result += f"  {path}\n"
     return result
 
 
@@ -111,4 +108,4 @@ def commit_all(message: str) -> str:
 
 
 def get_recent_commits() -> str:
-    return _git("log", "--oneline", "-20").stdout.strip()
+    return _run_git("log", "--oneline", "-20").stdout.strip()
