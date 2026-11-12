@@ -237,13 +237,17 @@ cm generate
 `cm --completions` writes a static completion script and exits. The destination is
 resolved in this order:
 
-1. `BASH_COMPLETION_USER_DIR` (first non-empty colon-separated entry)
-2. `XDG_DATA_HOME`
-3. `~/.local/share`
+1. `BASH_COMPLETION_USER_DIR` (first non-empty colon-separated entry) +
+   `completions`
+2. `XDG_DATA_HOME` + `bash-completion/completions`
+3. `~/.local/share` + `bash-completion/completions`
 
-The script is written to
-`<base>/bash-completion/completions/cm.bash`. Only the absolute path is printed
-to stdout; the `source` hint and warnings go to stderr:
+`BASH_COMPLETION_USER_DIR` already names the bash-completion base directory, so
+the script goes in its `completions` subdirectory. For the other locations the
+`bash-completion` directory is added. The script is named `cm.bash`, and
+installing it removes an older unsuffixed `cm` file so it cannot shadow the new
+one. Only the absolute path is printed to stdout; the `source` hint and warnings
+go to stderr:
 
 ```bash
 $ cm --completions

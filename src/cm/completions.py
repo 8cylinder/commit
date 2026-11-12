@@ -355,9 +355,15 @@ def _command_function(node: _Node) -> list[str]:
     flags = _flag_options(node.command)
     option_names = _visible_option_names(node.command)
 
+    # Bash calls the registered completion function with the command name as
+    # $1, the current word as $2, and the previous word as $3. Only child
+    # functions receive the internal start index as $1, so the root must not
+    # read its arguments.
+    start = "    local start=1" if node.id == 0 else '    local start="${1:-1}"'
+
     lines = [
         f"{node.func_name}() {{",
-        '    local start="${1:-1}"',
+        start,
         '    local cur="${COMP_WORDS[COMP_CWORD]}"',
         '    local prev="${COMP_WORDS[COMP_CWORD-1]}"',
         "    COMPREPLY=()",
@@ -479,8 +485,7 @@ def generate_bash_completion(
         lines.append("")
 
     lines.append(
-        "complete -o nosort -o bashdefault -o default "
-        f"-F {root.func_name} {shlex.quote(prog_name)}"
+        f"complete -o nosort -F {root.func_name} {shlex.quote(prog_name)}"
     )
     return "\n".join(lines) + "\n"
 
@@ -494,6 +499,11 @@ def completion_dir(environ: Mapping[str, str] | None = None) -> Path:
 
     The destination follows bash-completion's own search order:
     BASH_COMPLETION_USER_DIR, then XDG_DATA_HOME, then ~/.local/share.
+
+    BASH_COMPLETION_USER_DIR already points at the bash-completion base
+    directory, so only ``completions`` is appended to it. The other
+    locations are data directories, so they need ``bash-completion``
+    before ``completions``.
     """
     env = os.environ if environ is None else environ
 
@@ -502,7 +512,7 @@ def completion_dir(environ: Mapping[str, str] | None = None) -> Path:
         first = next((entry for entry in user_dir.split(":") if entry), None)
         if first:
             base = Path(first).expanduser()
-            return _absolute(base) / "bash-completion" / "completions"
+            return _absolute(base) / "completions"
 
     data_home = env.get("XDG_DATA_HOME")
     base = (
@@ -516,6 +526,18 @@ def completion_dir(environ: Mapping[str, str] | None = None) -> Path:
 def completion_path(environ: Mapping[str, str] | None = None) -> Path:
     """Return the path where the completion script is written."""
     return completion_dir(environ) / COMPLETION_FILENAME
+
+
+def _alternate_completion_paths(path: Path) -> tuple[Path, ...]:
+    """Return the other name bash-completion may load instead of *path*.
+
+    bash-completion tries both the unsuffixed command name and the ``.bash``
+    suffix, preferring the unsuffixed file. A leftover from an older install
+    would therefore shadow the newly written script, so it is removed.
+    """
+    if path.name.endswith(".bash"):
+        return (path.with_name(path.name[: -len(".bash")]),)
+    return (path.with_name(f"{path.name}.bash"),)
 
 
 def install_bash_completion(
@@ -541,6 +563,11 @@ def install_bash_completion(
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+
+    # Remove a leftover alternate filename so bash-completion cannot load it
+    # instead of the file just written.
+    for alternate in _alternate_completion_paths(path):
+        alternate.unlink(missing_ok=True)
     return path
 
 

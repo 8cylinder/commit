@@ -28,11 +28,16 @@ def _complete(
     if cword is None:
         cword = len(words) - 1
     quoted_words = " ".join(shlex.quote(word) for word in words)
+    callback_args = (
+        f"{shlex.quote(prog_name)} "
+        '"${COMP_WORDS[COMP_CWORD]}" '
+        '"${COMP_WORDS[COMP_CWORD-1]}"'
+    )
     command = f"""
 source {shlex.quote(str(path))}
 COMP_WORDS=({quoted_words})
 COMP_CWORD={cword}
-_{prog_name}_complete
+_{prog_name}_complete {callback_args}
 if (( ${{#COMPREPLY[@]}} )); then printf '%s\\n' "${{COMPREPLY[@]}}"; fi
 """
     result = subprocess.run(
@@ -80,9 +85,7 @@ def test_completion_path_prefers_bash_completion_user_dir(
 
     path = completions.completion_path(environ)
 
-    assert path == (
-        tmp_path / "one" / "bash-completion" / "completions" / "cm.bash"
-    )
+    assert path == tmp_path / "one" / "completions" / "cm.bash"
 
 
 def test_completion_path_skips_empty_user_dir_entries(tmp_path: Path) -> None:
@@ -93,9 +96,7 @@ def test_completion_path_skips_empty_user_dir_entries(tmp_path: Path) -> None:
 
     path = completions.completion_path(environ)
 
-    assert path == (
-        tmp_path / "two" / "bash-completion" / "completions" / "cm.bash"
-    )
+    assert path == tmp_path / "two" / "completions" / "cm.bash"
 
 
 def test_completion_path_uses_xdg_data_home(tmp_path: Path) -> None:
@@ -140,9 +141,7 @@ def test_completion_path_makes_relative_user_dir_absolute(
 
     path = completions.completion_path({"BASH_COMPLETION_USER_DIR": "relative"})
 
-    assert path == (
-        tmp_path / "relative" / "bash-completion" / "completions" / "cm.bash"
-    )
+    assert path == tmp_path / "relative" / "completions" / "cm.bash"
     assert path.is_absolute()
 
 
@@ -163,6 +162,32 @@ def test_install_completion_writes_atomic_file(
     assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
+def test_install_completion_removes_shadowing_legacy_file(
+    tmp_path: Path, demo: click.Group
+) -> None:
+    environ = {"XDG_DATA_HOME": str(tmp_path)}
+    path = tmp_path / "bash-completion" / "completions" / "cm.bash"
+    legacy = path.with_name("cm")
+    path.parent.mkdir(parents=True)
+    legacy.write_text("old", encoding="utf-8")
+
+    written = completions.install_bash_completion(
+        demo, "demo", "9.9.9", environ
+    )
+
+    assert written == path
+    assert path.exists()
+    assert not legacy.exists()
+
+
+def test_alternate_completion_path_adds_suffix(tmp_path: Path) -> None:
+    path = tmp_path / "cm"
+
+    assert completions._alternate_completion_paths(path) == (
+        tmp_path / "cm.bash",
+    )
+
+
 def test_generated_script_has_header_and_registration(
     tmp_path: Path, demo: click.Group
 ) -> None:
@@ -170,10 +195,9 @@ def test_generated_script_has_header_and_registration(
 
     assert "# bash completion for demo 9.9.9" in script
     assert "do not edit by hand" in script
-    assert (
-        "complete -o nosort -o bashdefault -o default -F _demo_complete demo"
-        in script
-    )
+    assert "complete -o nosort -F _demo_complete demo" in script
+    assert "-o default" not in script
+    assert "-o bashdefault" not in script
     assert "_demo_cmd_1" in script
 
 

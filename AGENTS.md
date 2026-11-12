@@ -99,9 +99,12 @@ and commits. The CLI is built with click.
 
 - `cm --completions` generates a static script from the click command tree. Do not
   use Click's dynamic completion API and do not run Python at tab-press time.
-- Destination precedence: first non-empty `BASH_COMPLETION_USER_DIR` entry, then
-  `XDG_DATA_HOME`, then `~/.local/share`. Append
-  `bash-completion/completions/cm.bash`. Use the `.bash` suffix, not unsuffixed `cm`.
+- Destination precedence: first non-empty `BASH_COMPLETION_USER_DIR` entry +
+  `completions`, then `XDG_DATA_HOME` + `bash-completion/completions`, then
+  `~/.local/share` + `bash-completion/completions`. Use the `.bash` suffix, not
+  unsuffixed `cm`. `BASH_COMPLETION_USER_DIR` already points at the
+  bash-completion base directory. Installation removes the alternate unsuffixed
+  name so an older file cannot shadow the new one.
 - Write atomically with mode 0644. Print only the path to stdout; the `source` hint
   and warnings go to stderr.
 - The script needs bash >= 4.4 and bash-completion >= 2.18 for auto-loading. Warn on
@@ -110,6 +113,9 @@ and commits. The CLI is built with click.
   the lack of zsh support.
 - The generator lives in `src/cm/completions.py` and takes the click group object;
   do not import the CLI module from `completions.py`.
+- Bash calls the registered completion function with the command name as `$1`,
+  the current word as `$2`, and the previous word as `$3`. Only child functions
+  generated for subcommands may treat `$1` as the internal start index.
 
 ## Tests
 
