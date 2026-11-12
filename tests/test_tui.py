@@ -33,6 +33,44 @@ def test_loads_message_with_line_numbers_and_80_columns() -> None:
     asyncio.run(run())
 
 
+def test_scrollbar_only_appears_when_text_overflows() -> None:
+    message = "\n".join(f"line {index}" for index in range(5))
+    app = CommitApp(message, commit=lambda _text: None)
+
+    async def run() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            editor = app.query_one("#message", TextArea)
+
+            assert editor.show_vertical_scrollbar is False
+            assert (
+                editor.scrollable_content_region.width - editor.gutter_width
+                == TEXT_COLUMNS
+            )
+
+            editor.text = "\n".join(f"line {index}" for index in range(100))
+            await pilot.pause()
+
+            assert editor.show_vertical_scrollbar is True
+            assert (
+                editor.scrollable_content_region.width - editor.gutter_width
+                == TEXT_COLUMNS
+            )
+
+            editor.text = "short"
+            await pilot.pause()
+
+            assert editor.show_vertical_scrollbar is False
+            assert (
+                editor.scrollable_content_region.width - editor.gutter_width
+                == TEXT_COLUMNS
+            )
+
+            await pilot.press("escape")
+
+    asyncio.run(run())
+
+
 def test_commit_button_sends_edited_message() -> None:
     committed: list[str] = []
     app = CommitApp("initial", commit=committed.append)

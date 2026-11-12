@@ -12,8 +12,9 @@ from textual.widgets import Button, Footer, Static, TextArea
 from .git import GitError
 
 TEXT_COLUMNS = 80
-# Round border (2), horizontal padding (2), and the vertical scrollbar (1).
-EDITOR_CHROME_WIDTH = 5
+# Round border (2) and horizontal padding (2). The scrollbar, when shown, is
+# added separately so the text area can stay exactly TEXT_COLUMNS wide.
+EDITOR_CHROME_WIDTH = 4
 
 CommitFunc = Callable[[str], object]
 
@@ -37,7 +38,7 @@ class CommitApp(App[bool]):
         height: 1fr;
         border: round $primary;
         padding: 0 1;
-        overflow-y: scroll;
+        overflow-y: auto;
         scrollbar-size-vertical: 1;
     }
 
@@ -95,8 +96,19 @@ class CommitApp(App[bool]):
 
     def on_mount(self) -> None:
         editor = self.query_one("#message", TextArea)
+        self.watch(
+            editor,
+            "show_vertical_scrollbar",
+            self._on_vertical_scrollbar_changed,
+            init=False,
+        )
         editor.focus()
         editor.move_cursor(editor.document.end)
+        self._resize_editor()
+
+    def _on_vertical_scrollbar_changed(
+        self, _old_value: bool, _new_value: bool
+    ) -> None:
         self._resize_editor()
 
     @on(TextArea.Changed)
@@ -107,7 +119,10 @@ class CommitApp(App[bool]):
     def _resize_editor(self) -> None:
         editor = self.query_one("#message", TextArea)
         editor.styles.width = (
-            TEXT_COLUMNS + editor.gutter_width + EDITOR_CHROME_WIDTH
+            TEXT_COLUMNS
+            + editor.gutter_width
+            + EDITOR_CHROME_WIDTH
+            + editor.scrollbar_size_vertical
         )
 
     def _show_error(self, message: str) -> None:
