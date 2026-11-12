@@ -10,8 +10,8 @@ requires-python = ">=3.13"
 license = "GPL-2.0-only"
 license-files = ["LICENSE"]
 dependencies = [
-    "boto3>=1.43.44",
-    "click>=8.3.0",
+    "boto3>=1.43.126",
+    "click>=8.5.1",
     "platformdirs>=4.0.0",
     "rich>=15.0.0",
     "textual>=8.2.8",
@@ -24,17 +24,17 @@ Issues = "https://github.com/8cylinder/commit/issues"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.2.0",
     "pytest-cov>=6.0.0",
-    "ruff>=0.16.7",
-    "ty>=0.0.80",
+    "ruff>=0.17.4",
+    "ty>=0.0.100",
 ]
 
 [project.scripts]
 cm = "cm.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.11.17,<0.12.0"]
+requires = ["uv_build>=0.13.7,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
