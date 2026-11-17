@@ -175,6 +175,73 @@ def test_copy_warning_goes_to_stderr(
     assert "could not copy" in result.stderr
 
 
+def test_plain_prints_without_copying(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    no_side_effects: None,
+) -> None:
+    provider = FakeProvider()
+    captured = _capture(monkeypatch, provider)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "plain"])
+
+    assert result.exit_code == 0
+    assert result.stdout == "Generated message\n"
+    assert captured["copied"] is None
+
+
+def test_plain_emits_no_color_or_markup(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    no_side_effects: None,
+) -> None:
+    _capture(monkeypatch, FakeProvider(message="[bold]Generated[/]"))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+
+    result = runner.invoke(
+        cli.main, ["--color", "always", "--provider", "deepseek", "plain"]
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout == "[bold]Generated[/]\n"
+    assert "\x1b" not in result.output
+
+
+def test_plain_does_not_show_a_status(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    no_side_effects: None,
+) -> None:
+    _capture(monkeypatch, FakeProvider())
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("plain should not show a status spinner")
+
+    monkeypatch.setattr(cli, "Status", fail)
+
+    result = runner.invoke(cli.main, ["--provider", "deepseek", "plain"])
+
+    assert result.exit_code == 0
+
+
+def test_plain_errors_stay_plain(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    no_side_effects: None,
+) -> None:
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    result = runner.invoke(
+        cli.main, ["--color", "always", "--provider", "deepseek", "plain"]
+    )
+
+    assert result.exit_code == 1
+    assert "DEEPSEEK_API_KEY is not set" in result.stderr
+    assert "\x1b" not in result.output
+
+
 def test_invalid_config_exits(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -237,7 +304,7 @@ def test_help_supports_dash_h(runner: CliRunner) -> None:
 
 @pytest.mark.parametrize("flag", ["-h", "--help"])
 def test_subcommand_help(runner: CliRunner, flag: str) -> None:
-    for command in ("generate", "commit"):
+    for command in ("generate", "plain", "commit"):
         result = runner.invoke(cli.main, [command, flag])
 
         assert result.exit_code == 0

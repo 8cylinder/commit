@@ -2,13 +2,15 @@
 
 `cm` is a small CLI that generates a git commit message from the working-tree diff
 using a pluggable AI provider (AWS Bedrock or DeepSeek). `cm generate` prints the
-message to stdout and copies it to the clipboard; `cm commit` opens a Textual editor
-and commits. The CLI is built with click.
+message to stdout and copies it to the clipboard; `cm plain` prints only the raw
+message for pipes; `cm commit` opens a Textual editor and commits. The CLI is built
+with click.
 
 ## Commands
 
 - Run: `uv run cm generate` (or `uv run cm --staged generate`). `uv` manages the env
   and installs the `cm` entry point from `[project.scripts]`.
+- Pipe raw message: `uv run cm plain` (no color, progress, or clipboard).
 - Commit via TUI: `uv run cm commit` (or `uv run cm --staged commit`).
 - Override selection:
   `uv run cm --provider {auto,bedrock,deepseek} --model <id> <command>`.
@@ -32,7 +34,7 @@ and commits. The CLI is built with click.
 
 ## Layout
 
-- `src/cm/cli.py` — click group, `AppGroup`/`AppCommand`, `generate`/`commit`
+- `src/cm/cli.py` — click group, `AppGroup`/`AppCommand`, `generate`/`plain`/`commit`
   subcommands, orchestration, `build_provider()` factory, color handling.
 - `src/cm/tui.py` — Textual `CommitApp`: editable message, Commit/Cancel buttons.
 - `src/cm/config.py` — `config.toml` loading, `platformdirs` path resolution, and
@@ -82,6 +84,9 @@ and commits. The CLI is built with click.
 - Human status, warnings, and errors go to stderr. Normal data goes to stdout.
   `cm generate` prints the commit message to stdout with markup disabled so brackets
   in model output are not interpreted.
+- `cm plain` writes only the raw message to stdout via `click.echo`, so it never
+  emits ANSI color and never copies to the clipboard. It also skips the `Status`
+  spinner and uses a plain stderr console, keeping the command safe for pipes.
 - Escape dynamic values with `rich.markup.escape()` before passing them to Rich.
 - `cm generate` reads ALL uncommitted changes, including untracked files, not just
   staged ones. `--staged` restricts to `git diff --cached`.

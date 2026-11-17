@@ -368,6 +368,7 @@ def test_root_completion_includes_commands_and_options(
     options = _complete(tmp_path, cli.main, ["cm", "-"], prog_name="cm")
 
     assert "generate" in commands
+    assert "plain" in commands
     assert "commit" in commands
     for option in (
         "--color",

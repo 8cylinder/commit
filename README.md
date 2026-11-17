@@ -75,6 +75,12 @@ Generate a message from staged changes only:
 cm --staged generate
 ```
 
+Generate a message for a pipe without color, progress, or a clipboard copy:
+
+```bash
+cm plain | git commit -F -
+```
+
 Edit the generated message in a terminal editor and commit:
 
 ```bash
@@ -96,6 +102,7 @@ Running `cm` without a subcommand prints help.
 | Command | Description |
 | --- | --- |
 | `generate` | Generate a commit message from the selected changes, print it to stdout, and copy it to the clipboard. |
+| `plain` | Generate a commit message and print it to stdout with no color or progress, without copying it. Intended for pipes. |
 | `commit` | Generate a message in an editable TUI, then commit with git. |
 
 ### Options
@@ -112,7 +119,9 @@ Running `cm` without a subcommand prints help.
 | `--model <id>` | Override the provider's model id. |
 
 `cm generate` prints the generated message to stdout. Progress, warnings, and
-errors go to stderr, so the message can be redirected or piped cleanly.
+errors go to stderr, so the message can be redirected or piped cleanly. `cm plain`
+goes further for scripts: it prints only the raw message to stdout, with no color,
+progress indicator, or clipboard copy.
 
 ### Commit TUI
 

@@ -147,12 +147,16 @@ def _generate_message(
     *,
     staged: bool,
     error_console: Console,
+    show_status: bool = True,
 ) -> str:
     selected_provider = build_provider(settings)
 
     diff = git.get_diff(staged=staged)
     stat = git.get_stat(staged=staged)
     user_prompt = prompt.build_prompt(diff, stat, git.get_recent_commits())
+
+    if not show_status:
+        return selected_provider.generate(user_prompt)
 
     with Status("Generating commit message...", console=error_console):
         return selected_provider.generate(user_prompt)
@@ -225,7 +229,8 @@ def _write_completions(
     invoke_without_command=True,
     no_args_is_help=False,
     epilog=(
-        "\b\nExamples:\n  cm generate\n  cm --staged generate\n  cm commit"
+        "\b\nExamples:\n  cm generate\n  cm plain\n  cm --staged generate\n"
+        "  cm commit"
     ),
 )
 @click.option(
@@ -320,6 +325,32 @@ def generate(ctx: click.Context) -> None:
             "[yellow]warning:[/] could not copy to the clipboard; the message "
             "is printed above. On Linux install wl-clipboard, xclip, or xsel."
         )
+
+
+@main.command(cls=AppCommand)
+@click.pass_context
+def plain(ctx: click.Context) -> None:
+    """Print a commit message for piping, with no color or clipboard copy."""
+    obj = cast(CliContext, ctx.obj)
+
+    # This command targets pipes and scripts, so keep diagnostics plain as well.
+    obj.error_console = Console(
+        stderr=True, force_terminal=False, no_color=True
+    )
+
+    try:
+        settings = _settings(obj)
+        message = _generate_message(
+            settings,
+            staged=obj.options.staged,
+            error_console=obj.error_console,
+            show_status=False,
+        )
+    except (ConfigError, ProviderError, git.GitError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise click.exceptions.Exit(1) from exc
+
+    click.echo(message)
 
 
 @main.command(cls=AppCommand)
